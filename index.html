@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Phone Notes (Offline)</title>
+  <style>
+    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+    body { margin: 0; padding: 1rem; line-height: 1.4; }
+    header { display: flex; align-items: center; gap: .6rem; }
+    h1 { font-size: 1.25rem; margin: .2rem 0 .8rem; }
+    textarea { width: 100%; min-height: 35vh; padding: .8rem; font-size: 1rem; box-sizing: border-box; }
+    .row { display: flex; gap: .6rem; margin: .6rem 0; }
+    button { padding: .7rem 1rem; border: 1px solid #ccc; border-radius: .6rem; background: #f7f7f7; }
+    input[type="text"]{ flex:1; padding:.7rem .9rem; border:1px solid #ccc; border-radius:.6rem; }
+    .tips { color: #666; font-size: .9rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Phone Notes</h1>
+    <span id="status" class="tips"></span>
+  </header>
+
+  <div class="row">
+    <input id="title" type="text" placeholder="Note title (optional)" />
+    <button id="newBtn">New</button>
+    <button id="deleteBtn">Delete</button>
+  </div>
+
+  <textarea id="note" placeholder="Type your note here…"></textarea>
+
+  <div class="row">
+    <button id="saveBtn">Save</button>
+    <button id="shareBtn">Share</button>
+    <button id="exportBtn">Export file</button>
+  </div>
+
+  <p class="tips">
+    Notes auto-save to your phone (LocalStorage). No internet needed.  
+    Tip: use the browser’s “Find on page” to search within a note.
+  </p>
+
+  <script>
+    // Simple offline notes app (single file)
+    const el = id => document.getElementById(id);
+    const title = el('title'), note = el('note');
+    const status = el('status');
+
+    const KEY = 'phone-notes:v1';
+    const loadAll = () => JSON.parse(localStorage.getItem(KEY) || '{}');
+    const saveAll = (data) => localStorage.setItem(KEY, JSON.stringify(data));
+
+    function setStatus(msg) {
+      status.textContent = msg;
+      clearTimeout(setStatus._t);
+      setStatus._t = setTimeout(()=> status.textContent = '', 1500);
+    }
+
+    function load(titleText) {
+      const all = loadAll();
+      title.value = titleText || (Object.keys(all)[0] || '');
+      note.value = title.value ? (all[title.value] || '') : '';
+    }
+
+    function save() {
+      const name = (title.value || '').trim() || 'Untitled';
+      const all = loadAll();
+      all[name] = note.value;
+      saveAll(all);
+      title.value = name;
+      setStatus('Saved ✓');
+    }
+
+    function del() {
+      const name = title.value.trim();
+      if (!name) return;
+      const all = loadAll();
+      if (all[name] != null && confirm(`Delete "${name}"?`)) {
+        delete all[name];
+        saveAll(all);
+        title.value = ''; note.value = '';
+        setStatus('Deleted');
+      }
+    }
+
+    // Export as a .txt file
+    function exportFile() {
+      const name = (title.value.trim() || 'note') + '.txt';
+      const blob = new Blob([note.value], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = name; document.body.appendChild(a); a.click();
+      URL.revokeObjectURL(url); a.remove();
+    }
+
+    // Native sharing (if supported)
+    async function share() {
+      try {
+        if (navigator.share) {
+          await navigator.share({ title: title.value || 'Note', text: note.value });
+        } else {
+          exportFile();
+        }
+      } catch {}
+    }
+
+    // Auto-save while typing (debounced)
+    let t;
+    note.addEventListener('input', () => {
+      clearTimeout(t);
+      t = setTimeout(save, 400);
+    });
+
+    el('saveBtn').onclick = save;
+    el('deleteBtn').onclick = del;
+    el('newBtn').onclick = () => { title.value=''; note.value=''; setStatus('New note'); };
+    el('exportBtn').onclick = exportFile;
+    el('shareBtn').onclick = share;
+
+    // First load
+    load();
+  </script>
+</body>
+</html>
